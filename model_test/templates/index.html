@@ -25,7 +25,7 @@
             {% if item.type == 'question' %}
                 <div class="question">질문: {{ item.content }}</div>
             {% else %}
-                <div class="answer">답변: {{ item.content }}</div>
+                <div class="answer">답변: {{ item.content }} <span>점수: {{ item.score }}</span></div>
             {% endif %}
         {% endfor %}
     </div>
@@ -40,6 +40,10 @@
     <form method="POST" style="margin-top: 10px;">
         <input type="submit" name="restart_chat" value="채팅 재시작">
     </form>
+
+    <div class="total-score">
+        <h3>점수: {{ average_score }}</h3>
+    </div>
     {% endif %}
 </body>
 </html>
