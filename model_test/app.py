@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 # CSV 파일 읽기
-df = pd.read_csv('/Users/kbsoo/coding/codes/python/model_test/all_temp.csv')
+df = pd.read_csv('/Users/kbsoo/coding/codes/python/model_test2/all_temp.csv')
 
 def use_prompt(message):
     occupation, gender, experience = message.split('/')
@@ -33,11 +33,12 @@ def use_prompt(message):
     Format the output as:
     질문: [Your generated question]
     답변: [Your generated answer]
+    all answers and questions should be korean
     """
     
     # OpenAI API 호출
     completion = client.chat.completions.create(
-        model='gpt-4',
+        model='gpt-4o',
         messages=[
             {"role": "system", "content": "You are a career advisor specializing in tech industry trends and challenges."},
             {"role": "user", "content": qa_prompt}
@@ -80,9 +81,9 @@ def index():
     result = None
     if request.method == 'POST':
         input_text = request.form['input']
-        # result = use_fine_model(input_text)
-        result = use_prompt(input_text)
-    return render_template('/templates/index.html', result=result)
+        result = use_fine_model(input_text)
+        result2 = use_prompt(input_text)
+    return render_template('index.html', result=result, result2=result2)
 
 if __name__ == '__main__':
     app.run(debug=True)
