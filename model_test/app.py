@@ -1,42 +1,39 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, session, redirect, url_for
 from openai import OpenAI
 from openai_api_key import OPENAI_API_KEY
 import re
 import pandas as pd
 
 app = Flask(__name__)
+app.secret_key = 'secretkey123'  # 세션을 위한 비밀 키 설정
 
 client = OpenAI(api_key=OPENAI_API_KEY)
-# CSV 파일 읽기
 df = pd.read_csv('/Users/kbsoo/coding/codes/python/model_test2/all_temp.csv')
 
-def use_prompt(message):
+def get_question(message):
     occupation, gender, experience = message.split('/')
     
-    # 데이터 필터링
     filtered_df = df[(df['occupation'] == occupation) & 
                      (df['gender'] == gender) & 
                      (df['experience'] == experience.upper())]
     
-    # 기존 질문과 답변 추출
     existing_qa = filtered_df[['question_text', 'answer_text']].values.tolist()
     
-    # 기존 Q&A를 바탕으로 프롬프트 생성
     qa_prompt = f"""
     Based on the following questions and answers for {occupation} professionals who are {gender} and {experience}:
 
     {existing_qa}
 
-    Generate a new
-    The question and answer should not directly repeat any of the existing ones, but should be inspired by the themes and insights present in them.
+    Generate a new, relevant question about career development, industry trends, or challenges faced by this group. 
+    The question should not directly repeat any of the existing ones, but should be inspired by the themes and insights present in them.
+    And The non-first question also allows you to ask questions related to the content and answer of the previous question.
     
     Format the output as:
     질문: [Your generated question]
-    답변: [Your generated answer]
-    all answers and questions should be korean
+    
+    The question should be in Korean.
     """
     
-    # OpenAI API 호출
     completion = client.chat.completions.create(
         model='gpt-4o',
         messages=[
@@ -46,44 +43,39 @@ def use_prompt(message):
     )
     content = completion.choices[0].message.content
 
-    # 정규 표현식을 사용하여 질문과 답변 추출
-    match = re.search(r'질문:\s*(.*?)\s*/?\s*답변:\s*(.*)', content, re.DOTALL)
+    match = re.search(r'질문:\s*(.*)', content, re.DOTALL)
     
     if match:
-        question = match.group(1).strip()
-        answer = match.group(2).strip()
-        return f"질문: {question}\n\n답변: {answer}"
+        return match.group(1).strip()
     else:
-        return f"질문과 답변을 찾을 수 없습니다.\n원본 응답: {content}"
-
-def use_fine_model(message):
-    completion = client.chat.completions.create(
-        model="ft:gpt-3.5-turbo-0125:personal::9op509tW",
-        messages=[
-            {"role": "system", "content": "학습한 내용을 바탕으로 occupation/gender/experienced 여부에 따라 적절한 질문과 그에 따른 모범답안을 생성해줘 질문:~~, 답변:~~ 형식으로 답해줘"},
-            {"role": "user", "content": message}
-        ]
-    )
-    content = completion.choices[0].message.content
-    
-    # 정규 표현식을 사용하여 질문과 답변 추출
-    match = re.search(r'질문:\s*(.*?)\s*/?\s*답변:\s*(.*)', content, re.DOTALL)
-    
-    if match:
-        question = match.group(1).strip()
-        answer = match.group(2).strip()
-        return f"질문: {question}\n\n답변: {answer}"
-    else:
-        return f"질문과 답변을 찾을 수 없습니다.\n원본 응답: {content}"
+        return "질문을 생성할 수 없습니다."
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    result = None
+    if 'chat_history' not in session:
+        session['chat_history'] = []
+    
     if request.method == 'POST':
-        input_text = request.form['input']
-        result = use_fine_model(input_text)
-        result2 = use_prompt(input_text)
-    return render_template('index.html', result=result, result2=result2)
+        if 'start_chat' in request.form:
+            input_text = request.form['input']
+            session['initial_input'] = input_text  # 초기 입력값 저장
+            question = get_question(input_text)
+            session['chat_history'] = [{'type': 'question', 'content': question}]
+        elif 'user_answer' in request.form:
+            user_answer = request.form['user_answer']
+            session['chat_history'].append({'type': 'answer', 'content': user_answer})
+            if 'initial_input' in session:
+                question = get_question(session['initial_input'])
+            else:
+                question = "죄송합니다. 새로운 질문을 생성할 수 없습니다. 채팅을 다시 시작해주세요."
+            session['chat_history'].append({'type': 'question', 'content': question})
+        elif 'restart_chat' in request.form:
+            session.clear()
+            return redirect(url_for('index'))
+        
+        session.modified = True
+    
+    return render_template('index.html', chat_history=session.get('chat_history', []))
 
 if __name__ == '__main__':
     app.run(debug=True)
