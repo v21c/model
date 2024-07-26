@@ -10,13 +10,34 @@ from bson import ObjectId
 app = Flask(__name__)
 app.secret_key = 'secretkey123'  # 세션을 위한 비밀 키 설정
 
-uri=URI
+uri = URI
 client = MongoClient(uri, server_api=ServerApi('1'))
 db = client['intheview']
 userId = ObjectId('66a3324a1cc4ca962e4c9afe')
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 df = pd.read_csv('/Users/kbsoo/coding/codes/python/model_test2/all_temp.csv')
+
+def get_score(question, answer):
+    prompt = f"""
+    Look at the following question and answer from the given interview and rate the answer on a scale from 0 to 100.
+
+    Question: {question}
+    Answer: {answer}
+
+    Score:
+    """
+    completion = client.chat.completions.create(
+        model='gpt-4o',
+        messages=[
+            {"role": "system", "content": "You are a rating assistant."},
+            {"role": "user", "content": prompt}
+        ]
+    )
+    content = completion.choices[0].message.content
+    score = re.search(r'Score:\s*(\d+)', content)
+    
+    return int(score.group(1)) if score else 0
 
 def get_question(message, chat_history):
     occupation, gender, experience = message.split('/')
@@ -64,6 +85,15 @@ def get_question(message, chat_history):
     else:
         return "질문을 생성할 수 없습니다."
 
+def calculate_average_score(session_id):
+    session_data = db['sessions'].find_one({"_id": session_id})
+    scores = [item.get('score', 0) for item in session_data['chat_history'] if item.get('score') is not None]
+    if len(scores) == 1:
+        return scores[0]  # 점수가 하나인 경우 그 점수를 반환
+    elif len(scores) > 1:
+        return sum(scores) / (len(scores) - 1)  # 점수가 여러 개일 때 평균을 반환
+    return 0  # 점수가 없는 경우 0을 반환
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if 'chat_history' not in session:
@@ -95,31 +125,39 @@ def index():
             # 새로 생성된 질문을 세션 데이터베이스에 추가
             session_collection.update_one(
                 {"_id": session_id},
-                {"$push": {"chat_history": {"question": question, "answer": ""}}}
+                {"$push": {"chat_history": {"question": question, "answer": "", "score": 0}}}
             )
             
         elif 'user_answer' in request.form:
             user_answer = request.form['user_answer']
-            session['chat_history'].append({'type': 'answer', 'content': user_answer})
             
-            session_id = ObjectId(session['session_id'])
-            # 마지막 질문 업데이트
-            session_collection.update_one(
-                {"_id": session_id, "chat_history.answer": ""},
-                {"$set": {"chat_history.$.answer": user_answer}}
-            )
+            if 'session_id' in session:
+                session_id = ObjectId(session['session_id'])
             
-            if 'initial_input' in session:
-                question = get_question(session['initial_input'], session['chat_history'])
-            else:
-                question = "죄송합니다. 새로운 질문을 생성할 수 없습니다. 채팅을 다시 시작해주세요."
-            session['chat_history'].append({'type': 'question', 'content': question})
-            
-            # 새로운 질문 추가
-            session_collection.update_one(
-                {"_id": session_id},
-                {"$push": {"chat_history": {"question": question, "answer": ""}}}
-            )
+                # 마지막 질문 가져오기
+                last_question = session['chat_history'][-1]['content']
+                score = get_score(last_question, user_answer)
+                
+                # 답변과 점수 업데이트
+                session['chat_history'].append({'type': 'answer', 'content': user_answer, 'score': score})
+                
+                # 데이터베이스 업데이트
+                session_collection.update_one(
+                    {"_id": session_id, "chat_history.answer": ""},
+                    {"$set": {"chat_history.$.answer": user_answer, "chat_history.$.score": score}}
+                )
+                
+                if 'initial_input' in session:
+                    question = get_question(session['initial_input'], session['chat_history'])
+                else:
+                    question = "죄송합니다. 새로운 질문을 생성할 수 없습니다. 채팅을 다시 시작해주세요."
+                session['chat_history'].append({'type': 'question', 'content': question})
+                
+                # 새로운 질문 추가
+                session_collection.update_one(
+                    {"_id": session_id},
+                    {"$push": {"chat_history": {"question": question, "answer": "", "score": 0}}}
+                )
             
         elif 'restart_chat' in request.form:
             session.clear()
@@ -127,7 +165,9 @@ def index():
         
         session.modified = True
     
-    return render_template('index.html', chat_history=session.get('chat_history', []))
+    average_score = calculate_average_score(ObjectId(session['session_id'])) if 'session_id' in session else 0
+    
+    return render_template('index.html', chat_history=session.get('chat_history', []), average_score=average_score)
 
 if __name__ == '__main__':
     app.run(debug=True)
