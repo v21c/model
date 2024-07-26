@@ -5,44 +5,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>InTheView</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        form {
-            margin-bottom: 20px;
-        }
-        input[type="text"] {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 10px;
-        }
-        input[type="submit"] {
-            padding: 10px 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-        pre {
-            background-color: #f4f4f4;
-            padding: 15px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .chat { border: 1px solid #ddd; padding: 20px; margin-bottom: 20px; }
+        .question { background-color: #f0f0f0; padding: 10px; margin-bottom: 10px; }
+        .answer { background-color: #e6f3ff; padding: 10px; margin-bottom: 10px; }
+        form { margin-top: 20px; }
     </style>
 </head>
 <body>
     <h1>InTheView</h1>
+
+    {% if not chat_history %}
     <form method="POST">
-        <input type="text" name="input" placeholder="직군/성별/경력직 여부를 입력하세요" required>
-        <input type="submit" value="Submit">
+        <input type="text" name="input" placeholder="occupation/gender/experience" required>
+        <input type="submit" name="start_chat" value="채팅 시작">
     </form>
-    {% if result %}
-        <h2>결과:</h2>
-        <pre>{{ result }}</pre>
+    {% else %}
+    <div class="chat">
+        {% for item in chat_history %}
+            {% if item.type == 'question' %}
+                <div class="question">질문: {{ item.content }}</div>
+            {% else %}
+                <div class="answer">답변: {{ item.content }}</div>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    {% if chat_history[-1].type == 'question' and chat_history[-1].content != "죄송합니다. 새로운 질문을 생성할 수 없습니다. 채팅을 다시 시작해주세요." %}
+    <form method="POST">
+        <textarea name="user_answer" rows="4" cols="50" placeholder="여기에 답변을 입력하세요..." required></textarea>
+        <br>
+        <input type="submit" value="답변 제출">
+    </form>
+    {% endif %}
+    <form method="POST" style="margin-top: 10px;">
+        <input type="submit" name="restart_chat" value="채팅 재시작">
+    </form>
     {% endif %}
 </body>
 </html>
