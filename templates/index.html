@@ -128,7 +128,7 @@
                     질문: {{ item.content }}
                     {% if loop.last and speech_file %}
                         <div class="audio-controls">
-                            <audio id="questionAudio" src="{{ url_for('get_audio') }}" controls></audio>
+                            <audio id="questionAudio" src="{{ url_for('get_audio', file_path=speech_file) }}" controls></audio>
                             <button onclick="document.getElementById('questionAudio').play()">질문 다시 듣기</button>
                         </div>
                     {% endif %}
