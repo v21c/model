@@ -56,7 +56,7 @@
             border-radius: 4px;
             font-size: 16px;
         }
-        input[type="submit"] {
+        input[type="submit"], button {
             background-color: #3498db;
             color: white;
             border: none;
@@ -65,8 +65,9 @@
             cursor: pointer;
             font-size: 16px;
             transition: background-color 0.3s;
+            margin-bottom: 10px;
         }
-        input[type="submit"]:hover {
+        input[type="submit"]:hover, button:hover {
             background-color: #2980b9;
         }
         .total-score {
@@ -110,6 +111,15 @@
         .restart-btn:hover {
             background-color: #c0392b;
         }
+        .audio-controls {
+            margin-top: 10px;
+        }
+        #recordButton {
+            background-color: #e74c3c;
+        }
+        #recordButton.recording {
+            background-color: #c0392b;
+        }
     </style>
 </head>
 <body>
@@ -128,12 +138,11 @@
                     질문: {{ item.content }}
                     {% if loop.last and speech_file %}
                         <div class="audio-controls">
-                            <audio id="questionAudio" src="{{ url_for('get_audio', file_path=speech_file) }}" controls></audio>
+                            <audio id="questionAudio" src="{{ url_for('get_audio', file_path=speech_file) }}"></audio>
                             <button onclick="document.getElementById('questionAudio').play()">질문 다시 듣기</button>
                         </div>
                     {% endif %}
                 </div>
-                
             {% else %}
                 <div class="answer">
                     답변: {{ item.content }}
@@ -144,11 +153,13 @@
     </div>
 
     {% if chat_history[-1].type == 'question' and chat_history[-1].content != "죄송합니다. 새로운 질문을 생성할 수 없습니다. 채팅을 다시 시작해주세요." %}
-    <form method="POST">
-        <textarea name="user_answer" rows="4" placeholder="여기에 답변을 입력하세요" required></textarea>
+    <form method="POST" id="answerForm">
+        <textarea name="user_answer" id="userAnswer" rows="4" placeholder="여기에 답변을 입력하세요" required></textarea>
         <input type="submit" value="답변 제출">
     </form>
+    <button id="recordButton">음성 녹음 시작</button>
     {% endif %}
+    
     <form method="POST">
         <input type="submit" name="restart_chat" value="채팅 재시작" class="restart-btn">
     </form>
@@ -159,6 +170,7 @@
         <div class="score-label">점</div>
     </div>
     {% endif %}
+
     <script>
         // 페이지 로드 시 자동으로 오디오 재생
         window.onload = function() {
@@ -166,6 +178,61 @@
             if (audio) {
                 audio.play();
             }
+        }
+
+        // 음성 녹음 기능
+        let mediaRecorder;
+        let audioChunks = [];
+
+        const recordButton = document.getElementById('recordButton');
+        const userAnswer = document.getElementById('userAnswer');
+
+        if (recordButton) {
+            recordButton.addEventListener('click', async () => {
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop();
+                    recordButton.textContent = '음성 녹음 시작';
+                    recordButton.classList.remove('recording');
+                } else {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+
+                    mediaRecorder.addEventListener('dataavailable', event => {
+                        audioChunks.push(event.data);
+                    });
+
+                    mediaRecorder.addEventListener('stop', () => {
+                        const audioBlob = new Blob(audioChunks);
+                        sendAudioToServer(audioBlob);
+                        audioChunks = [];
+                    });
+
+                    mediaRecorder.start();
+                    recordButton.textContent = '녹음 중지';
+                    recordButton.classList.add('recording');
+                }
+            });
+        }
+
+        function sendAudioToServer(audioBlob) {
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'recording.wav');
+
+            fetch('/submit_voice_answer', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    userAnswer.value = data.transcribed_text;
+                } else {
+                    console.error('Error:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
         }
     </script>
 </body>
