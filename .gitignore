@@ -1,0 +1,9 @@
+venv/
+
+__pycache__/
+
+all_temp.csv
+
+intheview-430901-1556179278a6.json
+
+openai_api_key.py
