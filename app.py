@@ -8,6 +8,7 @@ from pymongo.server_api import ServerApi
 from bson import ObjectId
 from pathlib import Path
 import os
+import uuid
 
 app = Flask(__name__)
 app.secret_key = 'secretkey123'  # 세션을 위한 비밀 키 설정
@@ -32,7 +33,7 @@ def get_score(question, answer):
     completion = client.chat.completions.create(
         model='gpt-4o',
         messages=[
-            {"role": "system", "content": "You are a interview rating assistant."},
+            {"role": "system", "content": "You are an interview rating assistant."},
             {"role": "user", "content": prompt}
         ]
     )
@@ -97,14 +98,15 @@ def calculate_average_score(session_id):
     return 0  # 점수가 없는 경우 0을 반환
 
 def generate_speech(text):
-    speech_file_path = Path(app.root_path) / "static" / "question.mp3"
+    unique_filename = f"{uuid.uuid4()}.mp3"
+    speech_file_path = Path(app.root_path) / "static" / unique_filename
     with client.audio.speech.with_streaming_response.create(
         model='tts-1',
         voice='alloy',
         input=text,
     ) as response:
         response.stream_to_file(str(speech_file_path))
-        return "static/speech.mp3"
+        return f"static/{unique_filename}"
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -142,6 +144,7 @@ def index():
 
             # TTS 생성
             speech_file = generate_speech(question)
+            session['speech_file'] = speech_file
             
         elif 'user_answer' in request.form:
             user_answer = request.form['user_answer']
@@ -176,22 +179,30 @@ def index():
 
                 # TTS 생성
                 speech_file = generate_speech(question)
+                session['speech_file'] = speech_file
             
         elif 'restart_chat' in request.form:
             session.clear()
             return redirect(url_for('index'))
         
         session.modified = True
-    else:
-        speech_file = None
     
+    speech_file = session.get('speech_file', None)
     average_score = calculate_average_score(ObjectId(session['session_id'])) if 'session_id' in session else 0
     
     return render_template('index.html', chat_history=session.get('chat_history', []), average_score=average_score, speech_file=speech_file)
 
 @app.route('/get_audio')
 def get_audio():
-    return send_file("static/question.mp3", mimetype="audio/mp3")
+    file_path = request.args.get('file_path')
+    if file_path:
+        return send_file(file_path, mimetype="audio/mp3")
+    else:
+        return "파일 경로를 제공해야 합니다.", 400
 
 if __name__ == '__main__':
+<<<<<<< HEAD
     app.run(debug=True)
+=======
+    app.run(debug=True,port=5001, host='0.0.0.0')
+>>>>>>> 294cbc6 (tts update2)
