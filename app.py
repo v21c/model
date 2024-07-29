@@ -91,11 +91,14 @@ def get_question(message, chat_history):
 
 def calculate_average_score(session_id):
     session_data = db['sessions'].find_one({"_id": session_id})
-    scores = [item.get('score', 0) for item in session_data['chat_history'] if item.get('score') is not None]
+    if not session_data:
+        return 0  # Session data가 없을 경우 0을 반환
+    
+    scores = [item.get('score', 0) for item in session_data.get('chat_history', []) if item.get('score') is not None]
     if len(scores) == 1:
         return round(scores[0])  # 점수가 하나인 경우 그 점수를 반올림하여 반환
     elif len(scores) > 1:
-        return round(sum(scores) / (len(scores) - 1))  # 점수가 여러 개일 때 평균을 계산하고 반올림하여 반환
+        return round(sum(scores) / len(scores))  # 점수가 여러 개일 때 평균을 계산하고 반올림하여 반환
     return 0  # 점수가 없는 경우 0을 반환
 
 def generate_speech(text):
