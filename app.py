@@ -146,7 +146,6 @@ def index():
             # TTS 생성
             speech_file = generate_speech(question)
             session['speech_file'] = speech_file
-            
         elif 'user_answer' in request.form:
             user_answer = request.form['user_answer']
             
@@ -192,6 +191,46 @@ def index():
     average_score = calculate_average_score(ObjectId(session['session_id'])) if 'session_id' in session else 0
     
     return render_template('index.html', chat_history=session.get('chat_history', []), average_score=average_score, speech_file=speech_file)
+
+@app.route('/submit_voice_answer', methods=['POST'])
+def submit_voice_answer():
+    if 'audio' not in request.files:
+        return jsonify({'error': 'No audio file provided'}), 400
+    
+    audio_file = request.files['audio']
+    
+    # 임시 파일로 저장
+    temp_filename = f"temp_{uuid.uuid4()}.wav"
+    temp_filepath = os.path.join(app.root_path, "static", temp_filename)
+    audio_file.save(temp_filepath)
+    
+    # Naver STT API 호출
+    lang = "Kor"
+    url = "https://naveropenapi.apigw.ntruss.com/recog/v1/stt?lang=" + lang
+    
+    headers = {
+        "X-NCP-APIGW-API-KEY-ID": CLIENT_ID,
+        "X-NCP-APIGW-API-KEY": CLIENT_SECRET,
+        "Content-Type": "application/octet-stream"
+    }
+    
+    with open(temp_filepath, 'rb') as audio:
+        response = requests.post(url, data=audio, headers=headers)
+    
+    # 임시 파일 삭제
+    os.remove(temp_filepath)
+    
+    if response.status_code == 200:
+        stt_result = response.json()
+        transcribed_text = stt_result.get('text', '')
+        print(f"Transcribed text: {transcribed_text}")
+        
+        return jsonify({
+            'success': True,
+            'transcribed_text': transcribed_text
+        })
+    
+    return jsonify({'error': 'Failed to process audio'}), 500
 
 @app.route('/get_audio')
 def get_audio():
