@@ -10,6 +10,7 @@ from pathlib import Path
 import os
 import uuid
 import requests
+import random
 
 app = Flask(__name__)
 app.secret_key = 'secretkey123'  # 세션을 위한 비밀 키 설정
@@ -21,6 +22,8 @@ userId = ObjectId('66a3324a1cc4ca962e4c9afe')
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 df = pd.read_csv('/Users/kbsoo/coding/codes/python/model_test2/all_temp.csv')
+
+voices = ['alloy', 'echo', 'fable', 'nova', 'onyx', 'shimmer']
 
 def get_score(question, answer):
     prompt = f"""
@@ -102,11 +105,12 @@ def calculate_average_score(session_id):
     return 0  # 점수가 없는 경우 0을 반환
 
 def generate_speech(text):
+
     unique_filename = f"{uuid.uuid4()}.mp3"
     speech_file_path = Path(app.root_path) / "static" / unique_filename
     with client.audio.speech.with_streaming_response.create(
         model='tts-1',
-        voice='alloy',
+        voice=random.choice(voices),
         input=text,
     ) as response:
         response.stream_to_file(str(speech_file_path))
