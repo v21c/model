@@ -1,6 +1,6 @@
-from flask import Flask, render_template, request, session, redirect, url_for, send_file
+from flask import Flask, render_template, request, session, redirect, url_for, send_file, jsonify
 from openai import OpenAI
-from openai_api_key import OPENAI_API_KEY, URI
+from openai_api_key import OPENAI_API_KEY, URI, CLIENT_ID, CLIENT_SECRET
 import re
 import pandas as pd
 from pymongo.mongo_client import MongoClient
@@ -9,6 +9,7 @@ from bson import ObjectId
 from pathlib import Path
 import os
 import uuid
+import requests
 
 app = Flask(__name__)
 app.secret_key = 'secretkey123'  # 세션을 위한 비밀 키 설정
@@ -201,8 +202,4 @@ def get_audio():
         return "파일 경로를 제공해야 합니다.", 400
 
 if __name__ == '__main__':
-<<<<<<< HEAD
-    app.run(debug=True)
-=======
     app.run(debug=True,port=5001, host='0.0.0.0')
->>>>>>> 294cbc6 (tts update2)
