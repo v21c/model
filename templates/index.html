@@ -179,45 +179,55 @@
                 audio.play();
             }
         }
-
+    
         // 음성 녹음 기능
         let mediaRecorder;
         let audioChunks = [];
-
+    
         const recordButton = document.getElementById('recordButton');
         const userAnswer = document.getElementById('userAnswer');
-
+    
+        async function startRecording() {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+    
+            mediaRecorder.addEventListener('dataavailable', event => {
+                audioChunks.push(event.data);
+            });
+    
+            mediaRecorder.addEventListener('stop', () => {
+                const audioBlob = new Blob(audioChunks);
+                sendAudioToServer(audioBlob);
+                audioChunks = [];
+            });
+    
+            mediaRecorder.start();
+            recordButton.textContent = '녹음 중지';
+            recordButton.classList.add('recording');
+        }
+    
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                recordButton.textContent = '음성 녹음 시작';
+                recordButton.classList.remove('recording');
+            }
+        }
+    
         if (recordButton) {
             recordButton.addEventListener('click', async () => {
                 if (mediaRecorder && mediaRecorder.state === 'recording') {
-                    mediaRecorder.stop();
-                    recordButton.textContent = '음성 녹음 시작';
-                    recordButton.classList.remove('recording');
+                    stopRecording();
                 } else {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    mediaRecorder = new MediaRecorder(stream);
-
-                    mediaRecorder.addEventListener('dataavailable', event => {
-                        audioChunks.push(event.data);
-                    });
-
-                    mediaRecorder.addEventListener('stop', () => {
-                        const audioBlob = new Blob(audioChunks);
-                        sendAudioToServer(audioBlob);
-                        audioChunks = [];
-                    });
-
-                    mediaRecorder.start();
-                    recordButton.textContent = '녹음 중지';
-                    recordButton.classList.add('recording');
+                    startRecording();
                 }
             });
         }
-
+    
         function sendAudioToServer(audioBlob) {
             const formData = new FormData();
             formData.append('audio', audioBlob, 'recording.wav');
-
+    
             fetch('/submit_voice_answer', {
                 method: 'POST',
                 body: formData
@@ -234,6 +244,19 @@
                 console.error('Error:', error);
             });
         }
+    
+        // 스페이스바 누르는 동안 녹음 시작하고, 뗄 때 중지
+        document.addEventListener('keydown', (event) => {
+            if (event.code === 'Space' && !event.repeat) {
+                startRecording();
+            }
+        });
+    
+        document.addEventListener('keyup', (event) => {
+            if (event.code === 'Space') {
+                stopRecording();
+            }
+        });
     </script>
 </body>
 </html>
