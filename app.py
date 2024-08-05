@@ -25,6 +25,56 @@ df = pd.read_csv('/Users/kbsoo/coding/codes/python/model_test2/all_temp.csv')
 
 voices = ['alloy', 'echo', 'fable', 'nova', 'onyx', 'shimmer']
 
+def generate_feedback(user_id):
+    # 사용자 정보를 가져옴
+    user = db['users'].find_one({"_id": user_id})
+    if not user:
+        return "User not found."
+
+    # 최근 최대 3개의 세션 ID를 가져옴
+    session_ids = user.get('sessions', [])[-3:]
+    if not session_ids:
+        return "No sessions found for the user."
+
+    # 세션 데이터 가져오기
+    sessions = db['sessions'].find({"_id": {"$in": session_ids}})
+    
+    chat_history_texts = []
+    for session in sessions:
+        chat_history = session.get('chat_history', [])
+        if chat_history:
+            chat_history_text = "\n".join(
+                [f"질문: {item['question']}\n답변: {item['answer']}" for item in chat_history if item['answer']]
+            )
+            chat_history_texts.append(chat_history_text)
+    
+    # 합쳐진 대화 내용
+    combined_chat_history = "\n\n".join(chat_history_texts)
+    
+    if not combined_chat_history:
+        return "No chat history available for feedback."
+
+    # 피드백 생성 프롬프트
+    feedback_prompt = f"""
+    Below is a series of interview questions and answers for a user. Please provide detailed and constructive feedback for the user's answers. The feedback should be in Korean and should focus on aspects like clarity, completeness, relevance, and areas of improvement.
+
+    {combined_chat_history}
+
+    Feedback:
+    """
+    
+    # GPT-4 모델을 사용하여 피드백 생성
+    completion = client.chat.completions.create(
+        model='gpt-4o',
+        messages=[
+            {"role": "system", "content": "You are a feedback assistant providing detailed and constructive feedback based on the provided interview responses."},
+            {"role": "user", "content": feedback_prompt}
+        ]
+    )
+    
+    feedback = completion.choices[0].message.content
+    return feedback
+
 def get_score(question, answer):
     prompt = f"""
     Look at the following question and answer from the given interview and rate the answer on a scale from 0 to 100.
